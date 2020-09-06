@@ -1,0 +1,199 @@
+In linux - ubuntu 18.04 LTS 
+
+#sudo apt-get update && sudo apt-get upgrade
+
+*set hostname
+#hostnamectl set-hostname <hostname>
+
+*add ip to hosts file
+edit -#sudo nano /etc/hosts
+under 127.0.0.1 localhost 
+add <ip> <hostname>
+save it
+
+
+OPTIONAL:(Create a seperate user)
+*optional- add a new user
+#sudo adduser <username>
+*grant user sudo permission
+#sudo adduser <username> sudo
+#sudo login
+
+#mkdir project
+#cd project
+clone project git repo
+#git clone url
+
+*Install python virtual env
+#sudo apt-get install python3-pip
+#sudo apt-get install python3-venv
+
+*create venv
+#python3 -m venv <projectfolder>/venv
+
+#source venv/bin/activate
+
+#pip install -r requirements.txt
+
+alter django settings.py
+* add host, add #STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+#python manage.py collectstatic
+
+#python manage.py runserver 0.0.0.0:8000
+* In aws should allowed 8000 port in security group -Now the website should be served at <ip>:8000
+
+*Install apache2 and wsgi
+#sudo apt-get install apache2
+#sudo apt-get install libapache2-mod-wsgi-py3
+
+Now the <ip> should serve apache default page
+
+*alter apache server configuration files
+#cd /etc/apache2/sites-available/
+*copy the default conf file 
+#sudo cp 000-default.conf <projectname>.conf
+#sudo nano projectname.conf
+befor the </VirtualHost> end tag add:
+
+Alias /static /home/ubuntu/project/docjini/static
+        <Directory /home/ubuntu/project/docjini/static>
+                Require all granted
+        </Directory>
+
+Note: Replace /home/ubuntu/project/docjini/static==>path to static in django project
+
+*If django project uses media add:(optional)
+Alias /media /home/ubuntu/project/docjini/media
+<Directory /home/ubuntu/project/docjini/media>
+                Require all granted
+        </Directory>
+
+*add wsgi file to apache configuration:
+<Directory /home/ubuntu/project/docjini/docsfinder>
+                <Files wsgi.py>
+                        Require all granted
+                </Files>
+        </Directory>
+WSGIScriptAlias / /home/ubuntu/project/docjini/docsfinder/wsgi.py
+WSGIDaemonProcess <docjini> python-path=/home/ubuntu/project/docjini python-home=/home/ubuntu/project/venv
+WSGIProcessGroup <docjini>
+Note: Replace /home/ubuntu/project/docjini/docsfinder =>path of django projectfolder containing wsgi.py
+      Replace docjini as projectname(can be anything ) 
+      python-path= path of django project
+      python-home = path of venv
+
+*change default apache2 configuration
+*activating new configuration file docjini.conf
+#sudo a2ensite docjini
+*deactivate default configurationfile 
+#sudo a2dissite 000-default.conf
+
+*reload apache2 server
+#systemctl reload apache2
+
+For best practies secret key and all refer vedio coreyms youtube vedio django linux setup
+
+*Install ssl letsencrypt certificate
+#sudo apt-get update
+#sudo apt-get install software-properties-common
+#sudo add-apt-repository universe
+#sudo add-apt-repository ppa:certbot/certbot
+#sudo apt-get update
+#sudo apt-get install python-certbot-apache
+
+*Now update apache conf file:
+#sudo nano /etc/apache2/sites-available/docjini.conf
+uncomment ServerName and all domain www.docjini.com
+
+*Now comment all the WSGI commands: so that the certbot works without erros-Comment all this three lines:
+#WSGIScriptAlias / /home/ubuntu/project/docjini/docsfinder/wsgi.py
+#WSGIDaemonProcess <docjini> python-path=/home/ubuntu/project/docjini python-home=/home/ubuntu/project/venv
+#WSGIProcessGroup <docjini>
+
+*Then run below commands
+#sudo certbot --apache
+*Enter mail id and agree terms then enter yes or no for letsencrypt newsletter 
+*Then it will ask domains 1.www.docjini.com enter blank to select all
+*Then select 2.Redirect for url resolve
+#sudo service apache2 restart
+
+*Now it should have created a new server conf file 
+#cd /etc/apache2/sites-available
+#ls 
+*Now it has a new docjini-le-ssl.conf file This is created by letsencrypt
+#sudo nano docjini-le-ssl.conf
+*Now uncomment them in New docjini-le-ssl.conf and save it
+#sudo nano docjini.conf
+*Then Delete the WSGIScriptAlias,WSGIProcessGroup,WSGIDaemonProcess and alias ,directorys because they are copied in new conf files and no need in old conf file docjini.conf 
+
+*Now it should look as :
+*docjini.conf:
+        <VirtualHost *:80>
+        # The ServerName directive sets the request scheme, hostname and port that
+        # the server uses to identify itself. This is used when creating
+        # redirection URLs. In the context of virtual hosts, the ServerName
+        # specifies what hostname must appear in the request's Host: header to
+        # match this virtual host. For the default virtual host (this file) this
+        # value is not decisive as it is used as a last resort host regardless.
+        # However, you must set it for any further virtual host explicitly.
+        ServerName www.docjini.com
+        ServerAdmin webmaster@localhost
+        DocumentRoot /var/www/html
+
+        # Available loglevels: trace8, ..., trace1, debug, info, notice, warn,
+        # error, crit, alert, emerg.
+        # It is also possible to configure the loglevel for particular
+        # modules, e.g.
+        #LogLevel info ssl:warn
+
+        ErrorLog ${APACHE_LOG_DIR}/error.log
+        CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+        # For most configuration files from conf-available/, which are
+        # enabled or disabled at a global level, it is possible to
+        # include a line for only one particular virtual host. For example the
+        # following line enables the CGI configuration for this host only
+        # after it has been globally disabled with "a2disconf".
+        #Include conf-available/serve-cgi-bin.conf
+
+RewriteEngine on
+RewriteCond %{SERVER_NAME} =www.docjini.com
+RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]
+</VirtualHost>
+
+# vim: syntax=apache ts=4 sw=4 sts=4 sr noet
+
+*SAVE IT 
+*Now check by running
+#sudo apachectl configtest
+*It shows something like: apache2: Could not reliably determine the server's fully qualified domain name, using 15.207.158.4. Set the 'ServerName' directive globally to suppress this message
+Syntax OK
+*Then It's ok
+#sudo service apache2 restart
+
+#sudo certbot renew --dry-run
+
+*To set up automatic ssl certificate renew:
+#sudo crontab -e
+*choose the editor -nano
+* below # m h  dom mon dow   command : line add
+#30 4 1 * * sudo certbot renew --quiet
+*This means at 30 mins 4 hour of day 1 of every month and every day of week run sudo certbot renew --quiet command.
+*Svae it and exit
+
+
+
+#sudo nano /etc/apache2/sites-enabled/docjini.conf
+*below server name line add
+#Redirect permanent / http://www.docjini.com/
+
+
+*Set up HSTS (HTTP Strict Transport Security) for production:
+
+*To enable Apache2 header module on Ubuntu systems, run the command below:
+
+#sudo a2enmod headers
+
+*After enabling the headers module for Apache2, look at the VirtualHost file for your website and add the line below. The line should be placed between the <VirtualHost *:443> and </VirtualHost>
+
+#Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
