@@ -1,4 +1,5 @@
 In linux - ubuntu 18.04 LTS 
+#-means actual commands *-means the steps
 
 #sudo apt-get update && sudo apt-get upgrade
 
